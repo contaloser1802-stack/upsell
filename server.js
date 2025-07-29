@@ -33,20 +33,19 @@ app.post('/gerar-pix', async (req, res) => {
     external_id: external_id, // Identificador único da sua transação (vindo do frontend)
     payment_method: "pix",
     amount: valor, // Valor em centavos
-    // *** AQUI ESTÁ A ESTRUTURA DO CAMPO 'buyer' QUE ACREDITAMOS SER A CORRETA ***
-    // Ele deve ser um OBJETO singular, sem colchetes de array.
-    // Os campos 'document' e 'phone' são garantidos como string (vazia se não houver valor).
-    buyer: { 
+    // *** TENTATIVA: Enviando 'buyer' como um ARRAY de um objeto,
+    // já que o erro da Buckpay insiste em 'buyer: Array(1)'. ***
+    buyer: [{ // Adiciona os colchetes aqui
       name: nome,
       email: email,
       document: cpf ? cpf.replace(/\D/g, '') : '', // Garante string vazia se CPF não for fornecido
       phone: telefone ? telefone.replace(/\D/g, '') : '' // Garante string vazia se telefone não for fornecido
-    },
+    }],
     // Você pode adicionar 'product', 'offer', 'tracking' aqui se necessário.
     // Consulte a documentação da Buckpay para os formatos corretos.
   };
 
-  // *** NOVO LOG DE DEPURAÇÃO ***
+  // *** LOG DE DEPURAÇÃO ***
   console.log('Dados enviados para a Buckpay (/gerar-pix):', JSON.stringify(dadosTransacaoBuckpay, null, 2));
 
   try {
