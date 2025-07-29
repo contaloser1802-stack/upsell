@@ -870,7 +870,7 @@
             if (responseData.success) {
               console.log("[Pagamento] PIX gerado com sucesso pela Buckpay.");
               // ALTERAÇÃO: paymentId agora é o ID da transação da Buckpay
-              window.paymentId = responseData.transaction_id; 
+              window.paymentId = responseData.transaction_id; 
 
               // Atualizar o código PIX na tela
               const codigoInput = document.getElementById("codigo-input");
@@ -925,7 +925,6 @@
           if (window.statusInterval) {
             clearInterval(window.statusInterval);
           }
-          // ALTERAÇÃO: Verificar a cada 7 segundos, conforme já está
           window.statusInterval = setInterval(verificarStatus, 7000);
         }
 
@@ -946,11 +945,7 @@
             feedbackCopia(document.querySelector("#copiar-codigo"));
           } catch (err) {
             console.error("[Pagamento] Erro ao copiar código:", err);
-            // Substituído alert por console.error para evitar pop-ups bloqueantes
-            // alert(
-            //   "Não foi possível copiar o código automaticamente. Por favor, copie manualmente."
-            // );
-            const statusDiv = document.getElementById('payment-status-message'); // Adicione este ID a uma div no seu HTML
+            const statusDiv = document.getElementById('payment-status-message');
             if (statusDiv) {
                 statusDiv.style.color = 'red';
                 statusDiv.innerText = 'Não foi possível copiar o código automaticamente. Por favor, copie manualmente.';
@@ -964,13 +959,12 @@
       });
 
       function manualVerifyPayment() {
-        // ALTERAÇÃO: Este botão agora chamará a função 'verificarStatus' novamente
         const button = document.querySelector(".verify-button");
         const originalText = button.textContent;
         button.textContent = "Verificando...";
         button.disabled = true;
 
-        verificarStatus().finally(() => { // Chama a função de verificação real
+        verificarStatus().finally(() => {
             button.textContent = originalText;
             button.disabled = false;
         });
