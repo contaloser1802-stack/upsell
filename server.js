@@ -4,14 +4,15 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 
 const app = express();
-const port = process.env.PORT || 3000; // O Render injeta a porta via process.env.PORT
+const port = process.env.PORT || 3000; // Usa a porta do Render, ou 3000 para desenvolvimento local
 
 app.use(cors());
 app.use(bodyParser.json());
 
 // ATENÇÃO: É altamente recomendável usar variáveis de ambiente para chaves sensíveis.
 // Ex: process.env.BUCKPAY_API_TOKEN
-const BUCKPAY_API_TOKEN = 'sk_live_69b0ed89aaa545ef5e67bfcef2c3e0c4'; // <-- Substitua pelo seu token real da Buckpay!
+// Se você configurou BUCKPAY_API_TOKEN como variável de ambiente no Render, use process.env.BUCKPAY_API_TOKEN
+const BUCKPAY_API_TOKEN = process.env.BUCKPAY_API_TOKEN || 'sk_live_69b0ed89aaa545ef5e67bfcef2c3e0c4'; 
 const BUCKPAY_API_ENDPOINT = 'https://api.realtechdev.com.br/v1/transactions';
 
 // --- Endpoint para Gerar Pix ---
@@ -32,12 +33,15 @@ app.post('/gerar-pix', async (req, res) => {
     external_id: external_id, // Identificador único da sua transação (vindo do frontend)
     payment_method: "pix",
     amount: valor, // Valor em centavos
-    buyer: {
-      name: nome,
-      email: email,
-      document: cpf ? cpf.replace(/\D/g, '') : undefined, // Remove pontos e hífens do CPF
-      phone: telefone ? telefone.replace(/\D/g, '') : undefined // Remove formatação do telefone
-    },
+    // *** CORREÇÃO AQUI: 'buyer' agora é 'buyers' e é um array de objetos ***
+    buyers: [ 
+      {
+        name: nome,
+        email: email,
+        document: cpf ? cpf.replace(/\D/g, '') : undefined, // Remove pontos e hífens do CPF
+        phone: telefone ? telefone.replace(/\D/g, '') : undefined // Remove formatação do telefone
+      }
+    ],
     // Você pode adicionar 'product', 'offer', 'tracking' aqui se necessário.
     // Consulte a documentação da Buckpay para os formatos corretos.
   };
@@ -48,7 +52,7 @@ app.post('/gerar-pix', async (req, res) => {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${BUCKPAY_API_TOKEN}`,
-        'User-Agent': 'Buckpay API' // O cabeçalho 'User-Agent' que você mencionou!
+        'User-Agent': 'Buckpay API'
       }
     });
 
@@ -62,7 +66,7 @@ app.post('/gerar-pix', async (req, res) => {
         transaction_id: response.data.data.id, // ID interno da transação na Buckpay
         pixCode: response.data.data.pix.code,         // Chave Pix Copia e Cola
         qrcode_base64: response.data.data.pix.qrcode_base64, // Imagem do QR Code em base64
-        external_id: external_id // <--- CORREÇÃO AQUI: Retorna o external_id original para o frontend
+        external_id: external_id // Retorna o external_id original para o frontend
       });
     } else {
       // Se não houver 'data' ou 'pix', é um formato de erro não mapeado ou sucesso inesperado
@@ -160,7 +164,5 @@ app.get('/status-pix/:external_id', async (req, res) => {
 
 // --- Inicia o Servidor ---
 app.listen(port, () => {
-  console.log(`Servidor rodando em http://localhost:${port}`);
-  // Em produção, a porta pode ser definida por uma variável de ambiente, ex: process.env.PORT
-  // E o console.log indicaria o domínio real
+  console.log(`Servidor rodando na porta ${port}`);
 });
