@@ -70,25 +70,20 @@ async function sendToUTMify(orderData, externalId, trackingDataFromMemory, statu
         userCommission = 1;
     }
 
-    // Criar um objeto temporário para trackingParameters para remover campos vazios
-    const tempTrackingParameters = {
-        utm_campaign: trackingDataFromMemory?.utm_campaign,
-        utm_content: trackingDataFromMemory?.utm_content,
-        utm_medium: trackingDataFromMemory?.utm_medium,
-        utm_source: trackingDataFromMemory?.utm_source,
-        utm_term: trackingDataFromMemory?.utm_term,
+    // === INÍCIO DA CORREÇÃO DE UTMIFY ===
+    // Revertendo a lógica de remover campos vazios.
+    // Agora, garantimos que todos os campos utm_ estejam presentes, mesmo que como string vazia.
+    const trackingParamsForUTMify = {
+        utm_campaign: trackingDataFromMemory?.utm_campaign || "",
+        utm_content: trackingDataFromMemory?.utm_content || "",
+        utm_medium: trackingDataFromMemory?.utm_medium || "",
+        utm_source: trackingDataFromMemory?.utm_source || "",
+        utm_term: trackingDataFromMemory?.utm_term || "",
         // Prioriza cid, depois utm_id, e por último externalId
         cid: trackingDataFromMemory?.cid || trackingDataFromMemory?.utm_id || externalId
     };
+    // === FIM DA CORREÇÃO DE UTMIFY ===
 
-    // Remover campos que são string vazia, null ou undefined, para não enviar para a UTMify se não houver valor significativo
-    for (const key in tempTrackingParameters) {
-        if (Object.prototype.hasOwnProperty.call(tempTrackingParameters, key)) {
-            if (tempTrackingParameters[key] === "" || tempTrackingParameters[key] === null || tempTrackingParameters[key] === undefined) {
-                delete tempTrackingParameters[key];
-            }
-        }
-    }
 
     const bodyForUTMify = {
         orderId: externalId,
@@ -119,7 +114,7 @@ async function sendToUTMify(orderData, externalId, trackingDataFromMemory, statu
             gatewayFeeInCents: gatewayFee, // Taxa do gateway
             userCommissionInCents: userCommission // Comissão líquida para o afiliado/usuário
         },
-        trackingParameters: tempTrackingParameters, // Usa o objeto filtrado e limpo
+        trackingParameters: trackingParamsForUTMify, // Usa o objeto corrigido
         isTest: false
     };
 
@@ -435,11 +430,10 @@ app.post("/webhook/buckpay", async (req, res) => {
     transactionInfo.product = data.product || transactionInfo.product;
     transactionInfo.offer = data.offer || transactionInfo.offer;
     
-    // Atualiza o tracking na memória com o que veio no webhook, se for mais completo ou diferente
-    // Mas o ideal é manter o tracking original da criação se possível para a UTMify
     // Para as UTMs, o tracking salvo na memória (`transactionInfo.tracking`) na criação do pedido é o mais relevante,
-    // pois ele veio do seu frontend. O `data.tracking` do webhook da BuckPay pode ser menos granular.
-    // Vamos manter `transactionInfo.tracking` como a fonte para a UTMify.
+    // pois ele veio do seu frontend.
+    // O `data.tracking` do webhook da BuckPay pode ser menos granular,
+    // então continuamos usando `transactionInfo.tracking` como a fonte para a UTMify.
 
     // Lógica para enviar para UTMify apenas quando necessário (idempotência aprimorada)
     let shouldSendToUTMify = false;
