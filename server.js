@@ -22,6 +22,19 @@ if (UTMIFY_TOKEN === "SEU_TOKEN_REAL_AQUI" && !process.env.UTMIFY_TOKEN) {
 
 
 // --- ARMAZENAMENTO TEMPORÁRIO EM MEMÓRIA ---
+// Chave: externalId
+// Valor: {
+//   createdAt: Date,
+//   buckpayId: string,
+//   status: string (e.g., 'pending', 'paid', 'expired', 'refunded')
+//   tracking: object, // Armazenará os parâmetros de tracking originais da BuckPay
+//   customer: object,
+//   product: object,
+//   offer: object,
+//   amountInCents: number, // Este é o valor TOTAL da transação
+//   gatewayFee: number, // Armazenará a taxa de gateway
+//   utmifyNotifiedStatus: Map<string, boolean> // NOVO: Para rastrear quais status já foram enviados para UTMify
+// }
 const pendingTransactions = new Map();
 const TRANSACTION_LIFETIME_MINUTES = 35;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
@@ -31,7 +44,10 @@ function cleanupTransactionsInMemory() {
     for (const [externalId, transactionInfo] of pendingTransactions.entries()) {
         const elapsedTimeMinutes = (now.getTime() - transactionInfo.createdAt.getTime()) / (1000 * 60);
 
-        if (transactionInfo.status !== 'pending' || elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES) {
+        // Remove transações se não estiverem pendentes E se já tiverem passado do tempo de vida,
+        // OU se estiverem pendentes e excederam o tempo de vida (para PIX não pago).
+        if ((transactionInfo.status !== 'pending' && elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES) ||
+            (transactionInfo.status === 'pending' && elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES)) {
             pendingTransactions.delete(externalId);
             console.log(`🧹 Transação ${externalId} (status: ${transactionInfo.status || 'sem status final'}) removida da memória após ${elapsedTimeMinutes.toFixed(0)} minutos.`);
         }
@@ -43,12 +59,35 @@ console.log(`Limpeza de transações agendada a cada ${CLEANUP_INTERVAL_MS / 100
 // --- FIM DO ARMAZENAMENTO TEMPORÁRIO ---
 
 // --- FUNÇÃO PARA ENVIAR PARA UTMify (Refatorada para reuso) ---
-async function sendToUTMify(orderData, externalId, trackingParameters, status, customerData, productData, offerData, gatewayFee) {
+async function sendToUTMify(orderData, externalId, trackingDataFromMemory, status, customerData, productData, offerData, gatewayFee) {
     console.log(`[UTMify] Tentando enviar status '${status}' para orderId: ${externalId}`);
 
-    let userCommission = orderData.amountInCents - (gatewayFee || 0);
-    if (status === 'paid' && orderData.amountInCents > 0 && userCommission <= 0) {
+    const totalOrderAmount = orderData.amountInCents || 0; // Garante que é um número, mesmo que 0
+    let userCommission = totalOrderAmount - (gatewayFee || 0);
+
+    // Garante que a comissão seja pelo menos 1 centavo para 'paid' se o valor original for > 0 e a comissão cair para <= 0
+    if (status === 'paid' && totalOrderAmount > 0 && userCommission <= 0) {
         userCommission = 1;
+    }
+
+    // Criar um objeto temporário para trackingParameters para remover campos vazios
+    const tempTrackingParameters = {
+        utm_campaign: trackingDataFromMemory?.utm_campaign,
+        utm_content: trackingDataFromMemory?.utm_content,
+        utm_medium: trackingDataFromMemory?.utm_medium,
+        utm_source: trackingDataFromMemory?.utm_source,
+        utm_term: trackingDataFromMemory?.utm_term,
+        // Prioriza cid, depois utm_id, e por último externalId
+        cid: trackingDataFromMemory?.cid || trackingDataFromMemory?.utm_id || externalId
+    };
+
+    // Remover campos que são string vazia, null ou undefined, para não enviar para a UTMify se não houver valor significativo
+    for (const key in tempTrackingParameters) {
+        if (Object.prototype.hasOwnProperty.call(tempTrackingParameters, key)) {
+            if (tempTrackingParameters[key] === "" || tempTrackingParameters[key] === null || tempTrackingParameters[key] === undefined) {
+                delete tempTrackingParameters[key];
+            }
+        }
     }
 
     const bodyForUTMify = {
@@ -70,24 +109,17 @@ async function sendToUTMify(orderData, externalId, trackingParameters, status, c
                 id: productData?.id || "recarga-ff",
                 name: productData?.name || "Recarga Free Fire",
                 quantity: offerData?.quantity || 1,
-                priceInCents: orderData.amountInCents || 0,
+                priceInCents: totalOrderAmount, // Sempre usa o valor total da transação aqui
                 planId: offerData?.id || "basic",
                 planName: offerData?.name || "Plano Básico"
             }
         ],
         commission: {
-            totalPriceInCents: orderData.amountInCents || 0,
-            gatewayFeeInCents: gatewayFee,
-            userCommissionInCents: userCommission
+            totalPriceInCents: totalOrderAmount, // Valor total do pedido
+            gatewayFeeInCents: gatewayFee, // Taxa do gateway
+            userCommissionInCents: userCommission // Comissão líquida para o afiliado/usuário
         },
-        trackingParameters: {
-            utm_campaign: trackingParameters?.utm_campaign || "",
-            utm_content: trackingParameters?.utm_content || "",
-            utm_medium: trackingParameters?.utm_medium || "",
-            utm_source: trackingParameters?.utm_source || "",
-            utm_term: trackingParameters?.utm_term || "",
-            cid: trackingParameters?.cid || externalId
-        },
+        trackingParameters: tempTrackingParameters, // Usa o objeto filtrado e limpo
         isTest: false
     };
 
@@ -106,14 +138,14 @@ async function sendToUTMify(orderData, externalId, trackingParameters, status, c
         const resultUTMify = await responseUTMify.json();
         if (!responseUTMify.ok) {
             console.error(`[UTMify Error] Status: ${responseUTMify.status}, Resposta:`, resultUTMify);
-            return false;
+            return false; // Indica falha no envio
         } else {
             console.log("[UTMify] Resposta:", resultUTMify);
-            return true;
+            return true; // Indica sucesso no envio
         }
     } catch (utmifyError) {
         console.error("[UTMify Error] Erro ao enviar dados para UTMify:", utmifyError);
-        return false;
+        return false; // Indica falha no envio
     }
 }
 // --- FIM DA FUNÇÃO UTMify ---
@@ -197,7 +229,6 @@ app.post("/create-payment", async (req, res) => {
         console.warn(`[CREATE PAYMENT] CPF não fornecido ou vazio pelo frontend. Gerando CPF de teste: ${buyerDocument}`);
     } else {
         // Se um CPF foi fornecido, mas é um dos padrões "fáceis" que podem ser rejeitados, substitua por um gerado.
-        // Isso é uma camada extra de segurança para CPFs como "11111111111", "00000000000" etc.
         if (/^(.)\1+$/.test(buyerDocument) && buyerDocument.length === 11) {
              buyerDocument = generateValidCpf(); // Força um CPF de teste gerado
              console.warn(`[CREATE PAYMENT] CPF gerado pelo frontend é sequencial. Substituindo por CPF de teste: ${buyerDocument}`);
@@ -214,14 +245,14 @@ app.post("/create-payment", async (req, res) => {
         }
     }
     if (cleanPhone.length < 12) {
-        cleanPhone = "5511987654321";
+        cleanPhone = "5511987654321"; // Default phone for testing if not provided properly
     }
-    cleanPhone = cleanPhone.substring(0, 13);
+    cleanPhone = cleanPhone.substring(0, 13); // Garante que o número não exceda 13 dígitos
 
     let offerPayload = null;
-    if (!offer_id && !offer_name && (discount_price === null || discount_price === undefined)) {
-        offerPayload = null;
-    } else {
+    // Verifica se há qualquer informação relevante da oferta para criar o payload.
+    // O critério é ter 'offer_id' ou 'offer_name' ou 'discount_price' explicitamente definido.
+    if (offer_id || offer_name || (discount_price !== null && discount_price !== undefined)) {
         offerPayload = {
             id: offer_id || "default_offer_id",
             name: offer_name || "Oferta Padrão",
@@ -231,15 +262,18 @@ app.post("/create-payment", async (req, res) => {
     }
 
     let buckpayTracking = {};
-    buckpayTracking.utm_source = tracking?.utm_source || 'direct';
-    buckpayTracking.utm_medium = tracking?.utm_medium || 'website';
-    buckpayTracking.utm_campaign = tracking?.utm_campaign || 'no_campaign';
-    buckpayTracking.src = tracking?.utm_source || 'direct';
-    buckpayTracking.utm_id = tracking?.xcod || tracking?.cid || externalId;
-    buckpayTracking.ref = tracking?.cid || externalId;
-    buckpayTracking.sck = tracking?.sck || 'no_sck_value';
-    buckpayTracking.utm_term = tracking?.utm_term || '';
-    buckpayTracking.utm_content = tracking?.utm_content || '';
+    // Garantir que tracking seja um objeto antes de acessar suas propriedades
+    const incomingTracking = tracking || {}; 
+
+    buckpayTracking.utm_source = incomingTracking.utm_source || 'direct';
+    buckpayTracking.utm_medium = incomingTracking.utm_medium || 'website';
+    buckpayTracking.utm_campaign = incomingTracking.utm_campaign || 'no_campaign';
+    buckpayTracking.src = incomingTracking.utm_source || 'direct';
+    buckpayTracking.utm_id = incomingTracking.xcod || incomingTracking.cid || externalId; // prioriza xcod, depois cid
+    buckpayTracking.ref = incomingTracking.cid || externalId;
+    buckpayTracking.sck = incomingTracking.sck || 'no_sck_value';
+    buckpayTracking.utm_term = incomingTracking.utm_term || '';
+    buckpayTracking.utm_content = incomingTracking.utm_content || '';
 
     const payload = {
         external_id: externalId,
@@ -264,7 +298,7 @@ app.post("/create-payment", async (req, res) => {
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${BUCK_PAY_API_KEY}`,
-                "User-Agent": "Buckpay API"
+                "User-Agent": "Buckpay API" // Boa prática para identificar sua aplicação
             },
             body: JSON.stringify(payload)
         });
@@ -290,25 +324,25 @@ app.post("/create-payment", async (req, res) => {
                 createdAt: new Date(),
                 buckpayId: data.data.id,
                 status: 'pending',
-                tracking: tracking,
+                tracking: incomingTracking, // Armazena o tracking original do frontend/request body
                 customer: { name, email, document: buyerDocument, phone: cleanPhone },
                 product: product_id && product_name ? { id: product_id, name: product_name } : null,
                 offer: offerPayload,
-                amountInCents: amountInCents,
-                gatewayFee: 0,
+                amountInCents: amountInCents, // Stores the initial total amount
+                gatewayFee: 0, // Será atualizado pelo webhook se disponível
                 utmifyNotifiedStatus: utmifyNotifiedStatus
             });
             console.log(`Transação ${externalId} (BuckPay ID: ${data.data.id}) registrada em memória como 'pending'.`);
 
             const sent = await sendToUTMify(
-                { amountInCents: amountInCents },
+                { amountInCents: amountInCents }, // Pass the initial total amount here
                 externalId,
-                tracking,
+                incomingTracking, // Usa o tracking original do frontend
                 "waiting_payment",
                 { name, email, document: buyerDocument, phone: cleanPhone },
                 product_id && product_name ? { id: product_id, name: product_name } : null,
                 offerPayload,
-                0
+                0 // Gateway fee é 0 nesta fase
             );
 
             if (sent) {
@@ -335,6 +369,7 @@ app.post("/create-payment", async (req, res) => {
 
 // Rota de Webhook da BuckPay (recebe notificações de status da BuckPay)
 app.post("/webhook/buckpay", async (req, res) => {
+    // --- START FULL BUCKPAY WEBHOOK BODY (para depuração) ---
     console.log("--- START FULL BUCKPAY WEBHOOK BODY ---");
     console.log(JSON.stringify(req.body, null, 2));
     console.log("--- END FULL BUCKPAY WEBHOOK BODY ---");
@@ -344,7 +379,7 @@ app.post("/webhook/buckpay", async (req, res) => {
 
     let externalIdFromWebhook = data.tracking?.ref || data.tracking?.utm_id || data.external_id;
     const currentBuckpayStatus = data.status;
-    const gatewayFeeFromWebhook = data.fees?.gateway_fee || 0;
+    const gatewayFeeFromWebhook = data.fees?.gateway_fee || 0; // Taxa de gateway da BuckPay
 
     console.log(`🔔 Webhook BuckPay recebido: Evento '${event}', Status '${currentBuckpayStatus}', ID BuckPay: '${data.id}', External ID: '${externalIdFromWebhook}'`);
 
@@ -355,15 +390,17 @@ app.post("/webhook/buckpay", async (req, res) => {
 
     let transactionInfo = pendingTransactions.get(externalIdFromWebhook);
 
+    // --- Cenário 1: Transação NÃO está em memória ---
     if (!transactionInfo) {
         console.warn(`Webhook para externalId ${externalIdFromWebhook} recebido, mas transação NÃO ENCONTRADA EM MEMÓRIA. Isso pode significar que expirou, foi concluída e limpa, ou nunca existiu.`);
 
         if (currentBuckpayStatus === 'paid') {
             console.warn(`Tentando enviar status 'paid' para UTMify mesmo sem encontrar transação em memória: ${externalIdFromWebhook}`);
+            // Usa os dados do webhook, priorizando o amount do webhook para o total da ordem
             await sendToUTMify(
-                { amountInCents: data.amount || 0 },
+                { amountInCents: data.amount || data.total_amount || 0 }, // Use data.amount or data.total_amount from webhook
                 externalIdFromWebhook,
-                data.tracking,
+                data.tracking, // Usa o tracking do próprio webhook (menos ideal, mas necessário como fallback)
                 "paid",
                 data.buyer,
                 data.product,
@@ -374,18 +411,37 @@ app.post("/webhook/buckpay", async (req, res) => {
         return res.status(200).send("Webhook recebido com sucesso (transação não encontrada em memória).");
     }
 
+    // --- Cenário 2: Transação ESTÁ em memória ---
+
+    // Sempre atualiza o gatewayFee se o webhook o fornecer
     if (gatewayFeeFromWebhook > 0) {
         transactionInfo.gatewayFee = gatewayFeeFromWebhook;
         console.log(`Gateway Fee para ${externalIdFromWebhook} atualizado em memória para ${transactionInfo.gatewayFee}.`);
     }
 
+    // Atualiza o amountInCents em memória com o valor mais recente (se o webhook trouxer um valor diferente/mais preciso)
+    // Isso é importante se o amount final for ajustado pela BuckPay (ex: por upsell/desconto dinâmico)
+    if (data.amount !== undefined && data.amount !== null) {
+        transactionInfo.amountInCents = data.amount;
+        console.log(`Amount para ${externalIdFromWebhook} atualizado em memória para ${transactionInfo.amountInCents}.`);
+    } else if (data.total_amount !== undefined && data.total_amount !== null) {
+        transactionInfo.amountInCents = data.total_amount;
+        console.log(`Total amount para ${externalIdFromWebhook} atualizado em memória para ${transactionInfo.amountInCents}.`);
+    }
+    
+    // Garante que os dados mais recentes do webhook BuckPay estejam na memória
     transactionInfo.buckpayId = data.id;
     transactionInfo.customer = data.buyer || transactionInfo.customer;
     transactionInfo.product = data.product || transactionInfo.product;
     transactionInfo.offer = data.offer || transactionInfo.offer;
-    transactionInfo.amountInCents = data.amount || transactionInfo.amountInCents;
+    
+    // Atualiza o tracking na memória com o que veio no webhook, se for mais completo ou diferente
+    // Mas o ideal é manter o tracking original da criação se possível para a UTMify
+    // Para as UTMs, o tracking salvo na memória (`transactionInfo.tracking`) na criação do pedido é o mais relevante,
+    // pois ele veio do seu frontend. O `data.tracking` do webhook da BuckPay pode ser menos granular.
+    // Vamos manter `transactionInfo.tracking` como a fonte para a UTMify.
 
-
+    // Lógica para enviar para UTMify apenas quando necessário (idempotência aprimorada)
     let shouldSendToUTMify = false;
     let utmifyStatusToSend = currentBuckpayStatus;
 
@@ -395,6 +451,7 @@ app.post("/webhook/buckpay", async (req, res) => {
         shouldSendToUTMify = true;
     } else {
         console.log(`❕ Webhook para ${externalIdFromWebhook} recebido, mas status '${currentBuckpayStatus}' já é o mesmo em memória.`);
+        // Mesmo que o status seja o mesmo, se for 'paid' e ainda não notificamos, notifique.
         if (currentBuckpayStatus === 'paid') {
             if (transactionInfo.utmifyNotifiedStatus.get("paid")) {
                 console.log(`   --> Status 'paid' já foi notificado para UTMify para ${externalIdFromWebhook}. Ignorando re-envio.`);
@@ -403,17 +460,16 @@ app.post("/webhook/buckpay", async (req, res) => {
                 console.warn(`   --> Status 'paid' em memória, mas não marcado como notificado. Tentando enviar para UTMify.`);
                 shouldSendToUTMify = true;
             }
-        }
-        else {
-            shouldSendToUTMify = false;
+        } else {
+            shouldSendToUTMify = false; // Para outros status, não re-envie se já foi processado
         }
     }
 
     if (shouldSendToUTMify) {
         const sent = await sendToUTMify(
-            { amountInCents: transactionInfo.amountInCents },
+            { amountInCents: transactionInfo.amountInCents }, // Use o amount atualizado da memória
             externalIdFromWebhook,
-            transactionInfo.tracking,
+            transactionInfo.tracking, // Use o tracking original salvo na memória
             utmifyStatusToSend,
             transactionInfo.customer,
             transactionInfo.product,
@@ -443,9 +499,11 @@ app.get("/check-order-status", async (req, res) => {
     if (transactionInfo) {
         const elapsedTimeMinutes = (now.getTime() - transactionInfo.createdAt.getTime()) / (1000 * 60);
 
-        if (transactionInfo.status === 'pending' && elapsedTimeMinutes > 30) {
+        // Se a transação ainda está 'pending' e excedeu o tempo de vida, marca como 'expired'.
+        if (transactionInfo.status === 'pending' && elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES) {
             transactionInfo.status = 'expired';
             console.log(`Transação ${externalId} marcada como 'expired' em memória (tempo de Pix excedido).`);
+            // Poderíamos enviar 'cancelled' para UTMify aqui se o frontend precisar saber.
         }
 
         console.log(`Retornando status em memória para ${externalId}: ${transactionInfo.status}`);
