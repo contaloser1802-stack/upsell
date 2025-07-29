@@ -187,7 +187,7 @@ app.post("/create-payment", async (req, res) => {
     
     // Se o documento não foi fornecido pelo frontend, ou está vazio após limpeza, use um CPF de teste válido.
     if (!buyerDocument || buyerDocument.length === 0) {
-        buyerDocument = "11111111111"; // CPF de teste válido conhecido pela BuckPay
+        buyerDocument = "00000000000"; // Tentar outro CPF de teste
         console.warn(`[CREATE PAYMENT] CPF não fornecido ou vazio pelo frontend. Usando CPF de teste: ${buyerDocument}`);
     } else {
         // Opcional: Adicionar uma validação básica se o CPF do frontend não for o de teste
