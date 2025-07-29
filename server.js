@@ -33,12 +33,13 @@ app.post('/gerar-pix', async (req, res) => {
     external_id: external_id, // Identificador único da sua transação (vindo do frontend)
     payment_method: "pix",
     amount: valor, // Valor em centavos
-    // *** CORREÇÃO AQUI: 'buyer' agora é um objeto singular, sem array ***
+    // *** CORREÇÃO AQUI: 'buyer' deve ser um objeto singular, sem colchetes de array.
+    // E os campos 'document' e 'phone' são garantidos como string (vazia se não houver valor). ***
     buyer: { 
       name: nome,
       email: email,
-      document: cpf ? cpf.replace(/\D/g, '') : undefined, // Remove pontos e hífens do CPF
-      phone: telefone ? telefone.replace(/\D/g, '') : undefined // Remove formatação do telefone
+      document: cpf ? cpf.replace(/\D/g, '') : '', // Garante string vazia se CPF não for fornecido
+      phone: telefone ? telefone.replace(/\D/g, '') : '' // Garante string vazia se telefone não for fornecido
     },
     // Você pode adicionar 'product', 'offer', 'tracking' aqui se necessário.
     // Consulte a documentação da Buckpay para os formatos corretos.
