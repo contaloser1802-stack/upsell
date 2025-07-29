@@ -654,6 +654,11 @@
     </div>
 
     <script>
+      // *** INÍCIO DAS ALTERAÇÕES ***
+
+      // 1. URL base do seu backend no Render
+      const BACKEND_URL = "https://upsell-backend.onrender.com";
+
       // ALTERAÇÃO: Importar uuidv4 do escopo global da biblioteca uuid
       const uuidv4 = window.uuid.v4;
 
@@ -739,13 +744,8 @@
         async function verificarStatus() {
           try {
             console.log("[Verificação] Verificando status do pagamento...");
-            // ALTERAÇÃO: A URL para verificar o status deve ir para o seu backend,
-            // que por sua vez consultará a Buckpay com o external_id.
-            // Você precisará criar um novo endpoint no seu backend para GET /v1/transactions/external_id/:external_id
-            
-            // ATENÇÃO: SEU BACKEND PRECISA IMPLEMENTAR ESSE ENDPOINT DE VERIFICAÇÃO!
-            // URL de verificação apontando para seu site freefirereward.site
-            const response = await fetch(`https://freefirereward.site/status-pix/${currentTransactionExternalId}`);
+            // ALTERAÇÃO: A URL para verificar o status agora aponta para o Render
+            const response = await fetch(`${BACKEND_URL}/status-pix/${currentTransactionExternalId}`);
             const responseData = await response.json(); // Já espera JSON do seu backend
             
             console.log("[Verificação] Resposta do backend:", responseData);
@@ -774,12 +774,42 @@
               document.getElementById("protocolo-pagamento").textContent = responseData.transaction_id;
 
               clearInterval(window.statusInterval);
+
+              // Redireciona após aprovado (para a página de upsell com o external_id)
+              setTimeout(() => {
+                window.location.href = `https://freefirereward.site/upsell?external_id=${currentTransactionExternalId}`; // URL corrigida
+              }, 1200);
+
+            } else if (
+              responseData.status === "canceled" ||
+              responseData.status === "refunded" ||
+              responseData.status === "expired" ||
+              responseData.status === "failed" || // Adiciona 'failed' da BuckPay
+              responseData.status === "not_found_or_expired" // Adiciona status do backend se não encontrar
+            ) {
+              clearInterval(window.statusInterval); // Parar o polling
+              // Usar uma modal ou div customizada em vez de alert()
+              // alert(`Pagamento ${responseData.status.toLowerCase()}. Por favor, refaça o pedido.`);
+              console.log("Pagamento cancelado ou falho:", responseData.status);
+              // Opcional: Redirecionar para página de erro ou manter na mesma e dar opção de refazer
+              // Exemplo de como mostrar uma mensagem na tela em vez de alert:
+              const statusDiv = document.getElementById('payment-status-message'); // Adicione este ID a uma div no seu HTML
+              if (statusDiv) {
+                  statusDiv.style.color = 'red';
+                  statusDiv.innerText = `Pagamento ${responseData.status.toLowerCase()}. Por favor, refaça o pedido.`;
+              }
             } else {
               console.log("[Verificação] Aguardando pagamento ou erro na resposta:", responseData.status);
             }
           } catch (error) {
             console.error("[Verificação] Erro ao verificar status:", error);
             // Considerar mostrar uma mensagem de erro na interface se a verificação falhar repetidamente
+            // Exemplo de como mostrar uma mensagem na tela em vez de alert:
+            const statusDiv = document.getElementById('payment-status-message'); // Adicione este ID a uma div no seu HTML
+            if (statusDiv) {
+                statusDiv.style.color = 'red';
+                statusDiv.innerText = 'Ocorreu um erro ao processar seu pagamento. Tente novamente mais tarde.';
+            }
           }
         }
 
@@ -825,9 +855,8 @@
               tracking: utmData // Passa os dados de tracking
             };
 
-            // Enviar dados para o servidor
-            // ALTERAÇÃO CRÍTICA AQUI: Mudar localhost para o domínio do seu site
-            const response = await fetch("https://freefirereward.site/gerar-pix", {
+            // Enviar dados para o servidor (agora apontando para o Render e o novo endpoint /pix)
+            const response = await fetch(`${BACKEND_URL}/gerar-pix`, { // Endpoint **mantido** como /gerar-pix
               method: "POST",
               headers: {
                 "Content-Type": "application/json"
@@ -845,33 +874,47 @@
 
               // Atualizar o código PIX na tela
               const codigoInput = document.getElementById("codigo-input");
-              codigoInput.value = responseData.pixCode;
+              codigoInput.value = responseData.pix.code; // A Buckpay retorna pix.code
+              // O qrcode_base64 vem da Buckpay, podemos usá-lo diretamente
+              const qrcodeBase64 = responseData.pix.qrcode_base64;
+              const qrCodeContainer = document.getElementById('qrCodeContainer');
+              let imgElement = qrCodeContainer.querySelector('img');
+              if (!imgElement) {
+                  imgElement = document.createElement('img');
+                  imgElement.id = 'pixQrCodeImage'; // Adiciona um ID para fácil referência
+                  qrCodeContainer.appendChild(imgElement);
+                  // Remove o canvas se ele existir e não for mais necessário
+                  const canvasElement = document.getElementById('pixQrCode');
+                  if (canvasElement) {
+                      canvasElement.remove();
+                  }
+              }
+              imgElement.src = `data:image/png;base64,${qrcodeBase64}`;
+              imgElement.style.maxWidth = '100%'; // Garante que a imagem seja responsiva
+              imgElement.style.height = 'auto';
 
-              // Gerar o QR Code no canvas
-              // ALTERAÇÃO: qrcode_base64 pode ser usado, mas QRCode.toCanvas usa o pixCode diretamente.
-              // Você pode escolher exibir a imagem base64 diretamente (criando um <img> e setando src)
-              // ou gerar com QRCode.toCanvas. O seu HTML já tem um <canvas>, então vamos usá-lo.
-              QRCode.toCanvas(document.getElementById('pixQrCode'), responseData.pixCode, function (error) {
-                if (error) {
-                  console.error("Erro ao gerar o QR Code:", error);
-                  // Opcional: tentar carregar a imagem base64 como fallback
-                  // const imgElement = document.createElement('img');
-                  // imgElement.src = `data:image/png;base64,${responseData.qrcode_base64}`;
-                  // document.getElementById('qrCodeContainer').appendChild(imgElement);
-                } else {
-                  console.log("QR Code gerado com sucesso com QRCode.toCanvas!");
-                }
-              });
 
               iniciarVerificacaoStatus();
             } else {
               console.error("[Pagamento] Erro ao gerar pagamento:", responseData.message, responseData.errorDetails);
-              alert(`Erro ao gerar PIX: ${responseData.message || 'Verifique o console para detalhes.'}`);
+              // Substituído alert por console.error para evitar pop-ups bloqueantes
+              // alert(`Erro ao gerar PIX: ${responseData.message || 'Verifique o console para detalhes.'}`);
+              const statusDiv = document.getElementById('payment-status-message'); // Adicione este ID a uma div no seu HTML
+              if (statusDiv) {
+                  statusDiv.style.color = 'red';
+                  statusDiv.innerText = `Erro ao gerar PIX: ${responseData.message || 'Verifique o console para detalhes.'}`;
+              }
             }
 
           } catch (error) {
             console.error("[Pagamento] Erro ao processar pagamento:", error);
-            alert("Ocorreu um erro ao processar seu pagamento. Tente novamente mais tarde.");
+            // Substituído alert por console.error para evitar pop-ups bloqueantes
+            // alert("Ocorreu um erro ao processar seu pagamento. Tente novamente mais tarde.");
+            const statusDiv = document.getElementById('payment-status-message'); // Adicione este ID a uma div no seu HTML
+            if (statusDiv) {
+                statusDiv.style.color = 'red';
+                statusDiv.innerText = 'Ocorreu um erro ao processar seu pagamento. Tente novamente mais tarde.';
+            }
           } finally {
             loadingPage.classList.add("hidden");
           }
@@ -903,9 +946,15 @@
             feedbackCopia(document.querySelector("#copiar-codigo"));
           } catch (err) {
             console.error("[Pagamento] Erro ao copiar código:", err);
-            alert(
-              "Não foi possível copiar o código automaticamente. Por favor, copie manualmente."
-            );
+            // Substituído alert por console.error para evitar pop-ups bloqueantes
+            // alert(
+            //   "Não foi possível copiar o código automaticamente. Por favor, copie manualmente."
+            // );
+            const statusDiv = document.getElementById('payment-status-message'); // Adicione este ID a uma div no seu HTML
+            if (statusDiv) {
+                statusDiv.style.color = 'red';
+                statusDiv.innerText = 'Não foi possível copiar o código automaticamente. Por favor, copie manualmente.';
+            }
           }
         };
 
