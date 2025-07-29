@@ -33,15 +33,13 @@ app.post('/gerar-pix', async (req, res) => {
     external_id: external_id, // Identificador único da sua transação (vindo do frontend)
     payment_method: "pix",
     amount: valor, // Valor em centavos
-    // *** CORREÇÃO AQUI: 'buyer' agora é 'buyers' e é um array de objetos ***
-    buyers: [ 
-      {
-        name: nome,
-        email: email,
-        document: cpf ? cpf.replace(/\D/g, '') : undefined, // Remove pontos e hífens do CPF
-        phone: telefone ? telefone.replace(/\D/g, '') : undefined // Remove formatação do telefone
-      }
-    ],
+    // *** CORREÇÃO AQUI: 'buyer' agora é um objeto singular, sem array ***
+    buyer: { 
+      name: nome,
+      email: email,
+      document: cpf ? cpf.replace(/\D/g, '') : undefined, // Remove pontos e hífens do CPF
+      phone: telefone ? telefone.replace(/\D/g, '') : undefined // Remove formatação do telefone
+    },
     // Você pode adicionar 'product', 'offer', 'tracking' aqui se necessário.
     // Consulte a documentação da Buckpay para os formatos corretos.
   };
@@ -152,10 +150,9 @@ app.get('/status-pix/:external_id', async (req, res) => {
         errorDetails: data.error ? data.error.detail : data,
       });
     } else {
-      // Erros de rede ou outros problemas
       return res.status(500).json({
         success: false,
-        message: 'Erro interno do servidor ao tentar verificar status.',
+        message: 'Erro interno do servidor ou falha de conexão.',
         errorDetails: error.message,
       });
     }
