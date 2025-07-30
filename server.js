@@ -53,8 +53,15 @@ async function sendToUTMify(externalId, status, transactionDataForUTMify) {
     console.log(`[UTMify] Tentando enviar status '${status}' para orderId: ${externalId}`);
 
     // Assegura que os valores de amount/fees sejam números válidos
-    const totalOrderAmount = transactionDataForUTMify.amountInCents || 0;
-    const gatewayFee = transactionDataForUTMify.gatewayFee || 0;
+    // **CORRIGIDO**: Garante que totalOrderAmount seja um número válido, nunca undefined ou null.
+    const totalOrderAmount = typeof transactionDataForUTMify.amountInCents === 'number' && !isNaN(transactionDataForUTMify.amountInCents)
+                               ? transactionDataForUTMify.amountInCents
+                               : 0;
+    // **CORRIGIDO**: Garante que gatewayFee seja um número válido, nunca undefined ou null.
+    const gatewayFee = typeof transactionDataForUTMify.gatewayFee === 'number' && !isNaN(transactionDataForUTMify.gatewayFee)
+                       ? transactionDataForUTMify.gatewayFee
+                       : 0;
+    
     let userCommission = totalOrderAmount - gatewayFee;
 
     // Garante que a comissão seja pelo menos 1 centavo para 'paid' se o valor original for > 0 e a comissão cair para <= 0
@@ -94,14 +101,14 @@ async function sendToUTMify(externalId, status, transactionDataForUTMify) {
                 id: transactionDataForUTMify.product?.id || "recarga-ff",
                 name: transactionDataForUTMify.product?.name || "Recarga Free Fire",
                 quantity: transactionDataForUTMify.offer?.quantity || 1,
-                priceInCents: totalOrderAmount, // Usa o valor total da transação
+                priceInCents: totalOrderAmount, // Usa o valor total da transação VALIDADO
                 planId: transactionDataForUTMify.offer?.id || "basic",
                 planName: transactionDataForUTMify.offer?.name || "Plano Básico"
             }
         ],
         commission: {
-            totalPriceInCents: totalOrderAmount, // Valor total do pedido
-            gatewayFeeInCents: gatewayFee, // Taxa do gateway (corrigido para aceitar 0)
+            totalPriceInCents: totalOrderAmount, // Valor total do pedido VALIDADO
+            gatewayFeeInCents: gatewayFee, // Taxa do gateway VALIDADO
             userCommissionInCents: userCommission // Comissão líquida para o afiliado/usuário
         },
         trackingParameters: trackingParamsForUTMify,
@@ -377,12 +384,11 @@ app.post("/webhook/buckpay", async (req, res) => {
     let externalIdFromWebhook = data.external_id || data.tracking?.ref || data.tracking?.utm_id;
     const currentBuckpayStatus = data.status;
     
-    // CORREÇÃO APLICADA AQUI: Garante que gatewayFeeFromWebhook seja 0 se não estiver presente.
-    // Ele será usado como fallback ou para atualizar a transação em memória.
+    // **CORRIGIDO**: Garante que gatewayFeeFromWebhook seja 0 se não estiver presente ou seja null/undefined.
     const gatewayFeeFromWebhook = data.fees?.gateway_fee !== undefined && data.fees?.gateway_fee !== null ? data.fees.gateway_fee : 0;
     
-    // Usa total_amount ou amount do webhook, garantindo que seja um número (0 se undefined/null)
-    const amountFromWebhook = data.total_amount !== undefined && data.total_amount !== null ? data.total_amount : (data.amount !== undefined && data.amount !== null ? data.amount : 0);
+    // **CORRIGIDO**: Usa total_amount ou amount do webhook, garantindo que seja um número (0 se undefined/null).
+    const amountFromWebhook = typeof data.total_amount === 'number' ? data.total_amount : (typeof data.amount === 'number' ? data.amount : 0);
 
 
     console.log(`🔔 Webhook BuckPay recebido: Evento '${event}', Status '${currentBuckpayStatus}', ID BuckPay: '${data.id}', External ID: '${externalIdFromWebhook}'`);
@@ -406,8 +412,8 @@ app.post("/webhook/buckpay", async (req, res) => {
                 externalIdFromWebhook,
                 "paid",
                 { // Constrói o objeto de dados a partir do webhook diretamente
-                    amountInCents: amountFromWebhook,
-                    gatewayFee: gatewayFeeFromWebhook,
+                    amountInCents: amountFromWebhook, // Usando o valor VALIDADO do webhook
+                    gatewayFee: gatewayFeeFromWebhook, // Usando a taxa VALIDADA do webhook
                     tracking: data.tracking, // Usa o tracking do próprio webhook
                     customer: data.buyer,
                     product: data.product,
@@ -420,16 +426,16 @@ app.post("/webhook/buckpay", async (req, res) => {
 
     // --- Cenário 2: Transação ESTÁ em memória ---
     
-    // Atualiza o gatewayFee e amountInCents em memória com os valores mais recentes do webhook.
-    // Esses valores são os que serão usados ao enviar para a UTMify.
-    transactionInfo.gatewayFee = gatewayFeeFromWebhook; // Agora aceita 0
-    transactionInfo.amountInCents = amountFromWebhook; // Agora aceita 0 ou o valor correto
+    // **CORRIGIDO**: Atualiza amountInCents e gatewayFee em memória com os valores mais recentes do webhook, garantindo que são números.
+    transactionInfo.gatewayFee = gatewayFeeFromWebhook; 
+    transactionInfo.amountInCents = amountFromWebhook; 
 
     console.log(`Gateway Fee para ${externalIdFromWebhook} atualizado em memória para ${transactionInfo.gatewayFee}.`);
     console.log(`Total amount para ${externalIdFromWebhook} atualizado em memória para ${transactionInfo.amountInCents}.`);
             
     // Garante que os dados mais recentes do webhook BuckPay estejam na memória
     transactionInfo.buckpayId = data.id;
+    // Prioriza dados do webhook, mas mantém os dados existentes se o webhook não os fornecer
     transactionInfo.customer = data.buyer || transactionInfo.customer;
     transactionInfo.product = data.product || transactionInfo.product;
     transactionInfo.offer = data.offer || transactionInfo.offer;
@@ -451,10 +457,10 @@ app.post("/webhook/buckpay", async (req, res) => {
         // Isso cobre casos onde o webhook de 'paid' é enviado múltiplas vezes.
         if (currentBuckpayStatus === 'paid') {
             if (transactionInfo.utmifyNotifiedStatus.get("paid")) {
-                console.log(`  --> Status 'paid' já foi notificado para UTMify para ${externalIdFromWebhook}. Ignorando re-envio.`);
+                console.log(`  --> Status 'paid' já foi notificado para UTMify para ${externalIdFromWebhook}. Ignorando re-envio.`);
                 shouldSendToUTMify = false;
             } else {
-                console.warn(`  --> Status 'paid' em memória, mas não marcado como notificado. Tentando enviar para UTMify.`);
+                console.warn(`  --> Status 'paid' em memória, mas não marcado como notificado. Tentando enviar para UTMify.`);
                 shouldSendToUTMify = true;
             }
         } else {
@@ -467,8 +473,8 @@ app.post("/webhook/buckpay", async (req, res) => {
             externalIdFromWebhook,
             utmifyStatusToSend,
             { // Passa o objeto completo da transação em memória para a função de envio
-                amountInCents: transactionInfo.amountInCents,
-                gatewayFee: transactionInfo.gatewayFee,
+                amountInCents: transactionInfo.amountInCents, // **USANDO O VALOR ATUALIZADO DA MEMÓRIA**
+                gatewayFee: transactionInfo.gatewayFee,     // **USANDO A TAXA ATUALIZADA DA MEMÓRIA**
                 tracking: transactionInfo.tracking, // Usa o tracking original salvo na memória
                 customer: transactionInfo.customer,
                 product: transactionInfo.product,
