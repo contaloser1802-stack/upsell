@@ -23,10 +23,10 @@ if (!UTMIFY_TOKEN) {
 // --- ARMAZENAMENTO TEMPORÁRIO EM MEMÓRIA ---
 // pendingTransactions: Mapeia externalId -> transactionInfo
 const pendingTransactions = new Map();
-// buckpayIdToExternalId: Mapeia buckpayId -> externalId (para lookup reverso no webhook)
+// buckpayIdToExternalId: Mapeia buckpayId (ID da BuckPay) -> externalId (seu ID original)
 const buckpayIdToExternalId = new Map(); 
 
-const TRANSACTION_LIFETIME_MINUTES = 35;
+const TRANSACTION_LIFETIME_MINUTES = 35; // Pode ser aumentado se Pix levar mais de 35 minutos
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 function cleanupTransactionsInMemory() {
@@ -34,14 +34,22 @@ function cleanupTransactionsInMemory() {
     for (const [externalId, transactionInfo] of pendingTransactions.entries()) {
         const elapsedTimeMinutes = (now.getTime() - transactionInfo.createdAt.getTime()) / (1000 * 60);
 
-        if ((transactionInfo.status !== 'pending' && elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES) ||
-            (transactionInfo.status === 'pending' && elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES)) {
+        // Limpa transações concluídas/expiradas
+        if (transactionInfo.status !== 'pending' && elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES) {
+            console.log(`🧹 Transação ${externalId} (status: ${transactionInfo.status}) removida da memória após ${elapsedTimeMinutes.toFixed(0)} minutos.`);
             pendingTransactions.delete(externalId);
-            // Também remove do mapa de buckpayId se existir
             if (transactionInfo.buckpayId) {
                 buckpayIdToExternalId.delete(transactionInfo.buckpayId);
             }
-            console.log(`🧹 Transação ${externalId} (status: ${transactionInfo.status || 'sem status final'}) removida da memória após ${elapsedTimeMinutes.toFixed(0)} minutos.`);
+        } 
+        // Se ainda estiver pendente e o tempo exceder o limite, marca como expirada e limpa
+        else if (transactionInfo.status === 'pending' && elapsedTimeMinutes > TRANSACTION_LIFETIME_MINUTES) {
+            transactionInfo.status = 'expired'; // Marca como expirada primeiro
+            console.log(`🧹 Transação ${externalId} (status: 'pending') expirou e foi removida da memória após ${elapsedTimeMinutes.toFixed(0)} minutos.`);
+            pendingTransactions.delete(externalId);
+            if (transactionInfo.buckpayId) {
+                buckpayIdToExternalId.delete(transactionInfo.buckpayId);
+            }
         }
     }
 }
@@ -51,8 +59,8 @@ console.log(`Limpeza de transações agendada a cada ${CLEANUP_INTERVAL_MS / 100
 // --- FIM DO ARMAZENAMENTO TEMPORÁRIO ---
 
 // --- FUNÇÃO PARA ENVIAR PARA UTMify (Refatorada para reuso) ---
-async function sendToUTMify(externalId, status, transactionDataForUTMify) {
-    console.log(`[UTMify] Tentando enviar status '${status}' para orderId: ${externalId}`);
+async function sendToUTMify(orderId, status, transactionDataForUTMify) { // Renomeado orderId para clareza
+    console.log(`[UTMify] Tentando enviar status '${status}' para orderId: ${orderId}`);
 
     const totalOrderAmount = typeof transactionDataForUTMify.amountInCents === 'number' && !isNaN(transactionDataForUTMify.amountInCents)
                                ? transactionDataForUTMify.amountInCents
@@ -64,8 +72,8 @@ async function sendToUTMify(externalId, status, transactionDataForUTMify) {
     let userCommission = totalOrderAmount - gatewayFee;
 
     if (status === 'paid' && totalOrderAmount > 0 && userCommission <= 0) {
-        userCommission = 1;
-        console.warn(`[UTMify] Comissão para ${externalId} ajustada para 1 centavo, pois o cálculo resultou em um valor não positivo.`);
+        userCommission = 1; // Garante 1 centavo para comissão se o cálculo resultar em 0 ou negativo
+        console.warn(`[UTMify] Comissão para ${orderId} ajustada para 1 centavo, pois o cálculo resultou em um valor não positivo.`);
     }
 
     const trackingParamsForUTMify = {
@@ -74,11 +82,11 @@ async function sendToUTMify(externalId, status, transactionDataForUTMify) {
         utm_medium: transactionDataForUTMify.tracking?.utm_medium || "",
         utm_source: transactionDataForUTMify.tracking?.utm_source || "",
         utm_term: transactionDataForUTMify.tracking?.utm_term || "",
-        cid: transactionDataForUTMify.tracking?.cid || transactionDataForUTMify.tracking?.utm_id || externalId
+        cid: transactionDataForUTMify.tracking?.cid || transactionDataForUTMify.tracking?.utm_id || orderId // Usa o orderId como fallback para cid
     };
 
     const bodyForUTMify = {
-        orderId: externalId,
+        orderId: orderId, // Usa o orderId (que será o seu externalId original)
         platform: "FreeFireCheckout",
         paymentMethod: "pix",
         status: status,
@@ -252,14 +260,14 @@ app.post("/create-payment", async (req, res) => {
     buckpayTracking.utm_medium = incomingTracking.utm_medium || 'website';
     buckpayTracking.utm_campaign = incomingTracking.utm_campaign || 'no_campaign';
     buckpayTracking.src = incomingTracking.utm_source || 'direct';
-    buckpayTracking.utm_id = incomingTracking.xcod || incomingTracking.cid || externalId;
+    buckpayTracking.utm_id = incomingTracking.xcod || incomingTracking.cid || externalId; // Garante que utm_id e ref sejam seu externalId
     buckpayTracking.ref = incomingTracking.cid || externalId;
     buckpayTracking.sck = incomingTracking.sck || 'no_sck_value';
     buckpayTracking.utm_term = incomingTracking.utm_term || '';
     buckpayTracking.utm_content = incomingTracking.utm_content || '';
 
     const payload = {
-        external_id: externalId,
+        external_id: externalId, // ESTE É O SEU ID ORIGINAL
         payment_method: "pix",
         amount: amountInCents,
         buyer: {
@@ -306,7 +314,7 @@ app.post("/create-payment", async (req, res) => {
             // Salva todas as informações relevantes da transação em memória
             pendingTransactions.set(externalId, {
                 createdAt: new Date(),
-                buckpayId: data.data.id, // Armazena o ID da BuckPay
+                buckpayId: data.data.id, // Armazena o ID da BuckPay que VEM NA RESPOSTA
                 status: 'pending',
                 tracking: incomingTracking,
                 customer: { name, email, document: buyerDocument, phone: cleanPhone },
@@ -322,7 +330,7 @@ app.post("/create-payment", async (req, res) => {
             console.log(`Transação ${externalId} (BuckPay ID: ${data.data.id}) registrada em memória como 'pending'.`);
 
             const sent = await sendToUTMify(
-                externalId,
+                externalId, // Sempre seu externalId original
                 "waiting_payment",
                 {
                     amountInCents: amountInCents,
@@ -359,64 +367,54 @@ app.post("/create-payment", async (req, res) => {
 // Rota de Webhook da BuckPay (recebe notificações de status da BuckPay)
 app.post("/webhook/buckpay", async (req, res) => {
     console.log("--- START FULL BUCKPAY WEBHOOK BODY ---");
-    console.log(JSON.stringify(req.body, null, 2));
+    console.log(JSON.stringify(req.body, null, 2)); // LOG COMPLETO AQUI É CRUCIAL PARA DEPURAR
     console.log("--- END FULL BUCKPAY WEBHOOK BODY ---");
 
     const event = req.body.event;
     const data = req.body.data;
 
-    // Tenta obter o externalId pelo buckpayId primeiro, depois pelos campos do webhook
-    let externalIdFromWebhook = data.external_id || data.tracking?.ref || data.tracking?.utm_id;
-    const buckpayIdFromWebhook = data.id; // O ID da transação da BuckPay
+    // AQUI ESTÁ A MUDANÇA MAIS IMPORTANTE: USE O ID INTERNO DA BUCKPAY PARA BUSCAR!
+    const buckpayInternalId = data.id; // Este é o ID que a BuckPay consistentemente usa para a transação.
 
-    // *** Lógica Adicional: Tenta encontrar o externalId usando o buckpayId ***
     let transactionInfo;
-    if (buckpayIdFromWebhook) {
-        const storedExternalId = buckpayIdToExternalId.get(buckpayIdFromWebhook);
-        if (storedExternalId) {
-            transactionInfo = pendingTransactions.get(storedExternalId);
+    let orderIdToUseForUTMify; // Este será o nosso externalId original
+
+    // Tenta encontrar o nosso externalId original usando o buckpayInternalId
+    if (buckpayInternalId) {
+        orderIdToUseForUTMify = buckpayIdToExternalId.get(buckpayInternalId);
+        if (orderIdToUseForUTMify) {
+            transactionInfo = pendingTransactions.get(orderIdToUseForUTMify);
             if (transactionInfo) {
-                console.log(`✅ Webhook: Transação encontrada em memória via buckpayId '${buckpayIdFromWebhook}' com externalId '${storedExternalId}'.`);
-                // Se encontrou via buckpayId, sobrescreve o externalIdFromWebhook para garantir consistência
-                externalIdFromWebhook = storedExternalId; 
+                console.log(`✅ Webhook: Transação encontrada em memória via buckpayInternalId '${buckpayInternalId}' mapeado para NOSSO externalId '${orderIdToUseForUTMify}'.`);
             }
-        }
-    }
-    // Se não encontrou via buckpayId, tenta buscar pelo externalId que veio no webhook (comportamento original)
-    if (!transactionInfo && externalIdFromWebhook) {
-        transactionInfo = pendingTransactions.get(externalIdFromWebhook);
-        if (transactionInfo) {
-            console.log(`✅ Webhook: Transação encontrada em memória via externalId '${externalIdFromWebhook}'.`);
         }
     }
 
     const currentBuckpayStatus = data.status;
     
-    const gatewayFeeFromWebhook = data.fees?.gateway_fee !== undefined && data.fees?.gateway_fee !== null ? data.fees.gateway_fee : 0;
+    // Certifique-se de que esses valores são numéricos e existem
+    const gatewayFeeFromWebhook = typeof data.fees?.gateway_fee === 'number' ? data.fees.gateway_fee : 0;
     const amountFromWebhook = typeof data.total_amount === 'number' ? data.total_amount : (typeof data.amount === 'number' ? data.amount : 0);
 
-
-    console.log(`🔔 Webhook BuckPay recebido: Evento '${event}', Status '${currentBuckpayStatus}', ID BuckPay: '${buckpayIdFromWebhook}', External ID (deduzido): '${externalIdFromWebhook}'`);
-
-    if (!externalIdFromWebhook && !buckpayIdFromWebhook) {
-        console.warn("Webhook recebido sem externalId ou buckpayId reconhecível. Ignorando.");
-        return res.status(200).send("Webhook recebido (IDs não encontrados).");
-    }
+    console.log(`🔔 Webhook BuckPay recebido: Evento '${event}', Status '${currentBuckpayStatus}', ID BuckPay (interno): '${buckpayInternalId}', NOSSO External ID (deduzido para busca e UTMify): '${orderIdToUseForUTMify || 'N/A'}'`);
 
     // --- Cenário 1: Transação NÃO está em memória ---
     if (!transactionInfo) {
-        console.warn(`Webhook para externalId ${externalIdFromWebhook} (ou BuckPay ID ${buckpayIdFromWebhook}) recebido, mas transação NÃO ENCONTRADA EM MEMÓRIA. Isso pode significar que expirou, foi concluída e limpa, ou nunca existiu.`);
+        console.warn(`Webhook para ID BuckPay '${buckpayInternalId}' (e NOSSO externalId '${orderIdToUseForUTMify || 'N/A'}') recebido, mas transação NÃO ENCONTRADA EM MEMÓRIA. Isso pode significar que expirou, foi concluída e limpa, ou nunca existiu.`);
 
         if (currentBuckpayStatus === 'paid') {
-            console.warn(`Tentando enviar status 'paid' para UTMify mesmo sem encontrar transação ${externalIdFromWebhook} em memória.`);
-            // IMPORTANTE: Aqui, usamos os dados diretamente do webhook, pois não temos os dados originais em memória.
+            console.warn(`Tentando enviar status 'paid' para UTMify mesmo sem encontrar transação em memória. Usando dados diretamente do webhook.`);
+            // IMPORTANTE: Aqui, usamos os dados diretamente do webhook.
+            // O `orderId` para UTMify será o buckpayInternalId se não encontramos o nosso `orderIdToUseForUTMify`.
+            // Isso pode causar uma entrada duplicada na UTMify (uma com o seu ID, outra com o da BuckPay),
+            // mas garante que a venda aprovada com comissão apareça.
             await sendToUTMify(
-                externalIdFromWebhook || buckpayIdFromWebhook, // Usa o externalId ou buckpayId como fallback para orderId na UTMify
+                orderIdToUseForUTMify || buckpayInternalId, // Usa o nosso ID se achou, senão usa o da BuckPay
                 "paid",
                 {
                     amountInCents: amountFromWebhook,
                     gatewayFee: gatewayFeeFromWebhook,
-                    tracking: data.tracking,
+                    tracking: data.tracking, // Usa o tracking do próprio webhook
                     customer: data.buyer,
                     product: data.product,
                     offer: data.offer
@@ -428,13 +426,12 @@ app.post("/webhook/buckpay", async (req, res) => {
 
     // --- Cenário 2: Transação ESTÁ em memória ---
     
+    // Atualiza os dados da transação em memória com os valores do webhook
     transactionInfo.gatewayFee = gatewayFeeFromWebhook;
     transactionInfo.amountInCents = amountFromWebhook;
-
-    console.log(`Gateway Fee para ${externalIdFromWebhook} atualizado em memória para ${transactionInfo.gatewayFee}.`);
-    console.log(`Total amount para ${externalIdFromWebhook} atualizado em memória para ${transactionInfo.amountInCents}.`);
             
-    transactionInfo.buckpayId = buckpayIdFromWebhook || transactionInfo.buckpayId; // Garante que o buckpayId esteja atualizado
+    // Garante que o buckpayId esteja atualizado na transação em memória
+    transactionInfo.buckpayId = buckpayInternalId || transactionInfo.buckpayId; 
     transactionInfo.customer = data.buyer || transactionInfo.customer;
     transactionInfo.product = data.product || transactionInfo.product;
     transactionInfo.offer = data.offer || transactionInfo.offer;
@@ -443,14 +440,14 @@ app.post("/webhook/buckpay", async (req, res) => {
     let utmifyStatusToSend = currentBuckpayStatus;
 
     if (transactionInfo.status !== currentBuckpayStatus) {
-        console.log(`Status da transação ${externalIdFromWebhook} MUDOU de '${transactionInfo.status}' para '${currentBuckpayStatus}'.`);
+        console.log(`Status da transação ${orderIdToUseForUTMify} MUDOU de '${transactionInfo.status}' para '${currentBuckpayStatus}'.`);
         transactionInfo.status = currentBuckpayStatus;
         shouldSendToUTMify = true;
     } else {
-        console.log(`❕ Webhook para ${externalIdFromWebhook} recebido, mas status '${currentBuckpayStatus}' já é o mesmo em memória.`);
+        console.log(`❕ Webhook para ${orderIdToUseForUTMify} recebido, mas status '${currentBuckpayStatus}' já é o mesmo em memória.`);
         if (currentBuckpayStatus === 'paid') {
             if (transactionInfo.utmifyNotifiedStatus.get("paid")) {
-                console.log(`  --> Status 'paid' já foi notificado para UTMify para ${externalIdFromWebhook}. Ignorando re-envio.`);
+                console.log(`  --> Status 'paid' já foi notificado para UTMify para ${orderIdToUseForUTMify}. Ignorando re-envio.`);
                 shouldSendToUTMify = false;
             } else {
                 console.warn(`  --> Status 'paid' em memória, mas não marcado como notificado. Tentando enviar para UTMify.`);
@@ -463,7 +460,7 @@ app.post("/webhook/buckpay", async (req, res) => {
 
     if (shouldSendToUTMify) {
         const sent = await sendToUTMify(
-            externalIdFromWebhook,
+            orderIdToUseForUTMify, // SEMPRE seu externalId original
             utmifyStatusToSend,
             {
                 amountInCents: transactionInfo.amountInCents,
